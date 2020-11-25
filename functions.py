@@ -16,6 +16,7 @@ from sklearn.metrics import silhouette_score
 from sklearn.mixture import GaussianMixture
 from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from utils import ds_functions as ds
 import matplotlib.pyplot as plt
 
@@ -702,7 +703,9 @@ def fullClustering(data, target, v1=0, v2=1, N_CLUSTERS=(2, 3, 5, 7, 9, 11, 13, 
 
     if withFeatureExtraction:
         transf = featureExtraction(data, target, variance, minimum2=True)
-        data = transf[transf.columns[0:2]]
+        data = transf[[transf.columns[v1], transf.columns[v2]]]
+        v1 = 1
+        v2 = 0
         targetData = transf.pop(target)
     else:
         targetData = data.pop(target)
