@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import warnings
 import sklearn.metrics as metrics
-import config as cfg
+from utils import config as cfg
 import datetime as dt
 import matplotlib.colors as colors
 
