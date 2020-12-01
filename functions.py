@@ -17,6 +17,7 @@ from sklearn.mixture import GaussianMixture
 from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
+from sklearn.metrics.cluster import adjusted_rand_score, fowlkes_mallows_score
 from utils import ds_functions as ds
 import matplotlib.pyplot as plt
 
@@ -515,20 +516,34 @@ def findBest(data, target, correlationThresholds, varianceThresholds, featureExt
 
 # Unsupervised Learning
 
-def kmeans(data, v1, v2, N_CLUSTERS, rows, cols):
+def kmeans(data, v1, v2, N_CLUSTERS, rows, cols, compareToTargetVerbose=0, targetData=None, similarityThreshold=0):
     mse: list = []
     sc: list = []
     fig, axs = plt.subplots(rows, cols, figsize=(cols * 5, rows * 5), squeeze=False)
     i, j = 0, 0
+    maxSim = {"max": -np.inf, "cluster": -1, "k": -1}
     for n in range(len(N_CLUSTERS)):
         k = N_CLUSTERS[n]
-        estimator = KMeans(n_clusters=k)
+        estimator = KMeans(n_clusters=k, random_state=RANDOM_STATE)
         estimator.fit(data)
         mse.append(estimator.inertia_)
         sc.append(silhouette_score(data, estimator.labels_))
         ds.plot_clusters(data, v2, v1, estimator.labels_.astype(float), estimator.cluster_centers_, k,
                          f'KMeans k={k}', ax=axs[i, j])
         i, j = (i + 1, 0) if (n + 1) % cols == 0 else (i, j + 1)
+
+        if compareToTargetVerbose > 0:
+            if compareToTargetVerbose > 1:
+                print(k, "clusters:")
+            for cluster in range(k):
+                score = adjusted_rand_score(targetData, np.array(estimator.labels_) == cluster)
+                if compareToTargetVerbose > 1 and score > similarityThreshold:
+                    print("Cluster", cluster, "->", score)
+                if maxSim["max"] < score:
+                    maxSim["max"] = score
+                    maxSim["cluster"] = i
+                    maxSim["k"] = k
+
     plt.show()
 
     fig, ax = plt.subplots(1, 2, figsize=(6, 3), squeeze=False)
@@ -537,15 +552,19 @@ def kmeans(data, v1, v2, N_CLUSTERS, rows, cols):
     plt.ylim(-1, 1)
     plt.show()
 
+    if compareToTargetVerbose > 0:
+        print(maxSim)
 
-def em(data, v1, v2, N_CLUSTERS, rows, cols):
+
+def em(data, v1, v2, N_CLUSTERS, rows, cols, compareToTargetVerbose=0, targetData=None, similarityThreshold=0):
     mse: list = []
     sc: list = []
     _, axs = plt.subplots(rows, cols, figsize=(cols * 5, rows * 5), squeeze=False)
     i, j = 0, 0
+    maxSim = {"max": -np.inf, "cluster": -1, "k": -1}
     for n in range(len(N_CLUSTERS)):
         k = N_CLUSTERS[n]
-        estimator = GaussianMixture(n_components=k)
+        estimator = GaussianMixture(n_components=k, random_state=RANDOM_STATE)
         estimator.fit(data)
         labels = estimator.predict(data)
         mse.append(ds.compute_mse(data.values, labels, estimator.means_))
@@ -553,6 +572,19 @@ def em(data, v1, v2, N_CLUSTERS, rows, cols):
         ds.plot_clusters(data, v2, v1, labels.astype(float), estimator.means_, k,
                          f'EM k={k}', ax=axs[i, j])
         i, j = (i + 1, 0) if (n + 1) % cols == 0 else (i, j + 1)
+
+        if compareToTargetVerbose > 0:
+            if compareToTargetVerbose > 1:
+                print(k, "clusters:")
+            for cluster in range(k):
+                score = adjusted_rand_score(targetData, np.array(labels) == cluster)
+                if compareToTargetVerbose > 1 and score > similarityThreshold:
+                    print("Cluster", cluster, "->", score)
+                if maxSim["max"] < score:
+                    maxSim["max"] = score
+                    maxSim["cluster"] = i
+                    maxSim["k"] = k
+
     plt.show()
 
     fig, ax = plt.subplots(1, 2, figsize=(6, 3), squeeze=False)
@@ -561,14 +593,18 @@ def em(data, v1, v2, N_CLUSTERS, rows, cols):
     plt.ylim(-1, 1)
     plt.show()
 
+    if compareToTargetVerbose > 0:
+        print(maxSim)
 
-def eps(data, v1, v2):
+
+def eps(data, v1, v2, compareToTargetVerbose=0, targetData=None, similarityThreshold=0):
     EPS = [2.5, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     mse: list = []
     sc: list = []
     rows, cols = ds.choose_grid(len(EPS))
     _, axs = plt.subplots(rows, cols, figsize=(cols * 5, rows * 5), squeeze=False)
     i, j = 0, 0
+    maxSim = {"max": -np.inf, "cluster": -1, "k": -1, "eps": -1}
     for n in range(len(EPS)):
         estimator = DBSCAN(eps=EPS[n], min_samples=2)
         estimator.fit(data)
@@ -581,6 +617,20 @@ def eps(data, v1, v2):
             ds.plot_clusters(data, v2, v1, labels.astype(float), estimator.components_, k,
                              f'DBSCAN eps={EPS[n]} k={k}', ax=axs[i, j])
             i, j = (i + 1, 0) if (n + 1) % cols == 0 else (i, j + 1)
+
+            if compareToTargetVerbose > 0:
+                if compareToTargetVerbose > 1:
+                    print(k, "clusters:")
+                for cluster in range(k):
+                    score = adjusted_rand_score(targetData, np.array(estimator.labels_) == cluster)
+                    if compareToTargetVerbose > 1 and score > similarityThreshold:
+                        print("Cluster", cluster, "->", score)
+                    if maxSim["max"] < score:
+                        maxSim["max"] = score
+                        maxSim["cluster"] = i
+                        maxSim["k"] = k
+                        maxSim["eps"] = EPS[n]
+
         else:
             mse.append(0)
             sc.append(0)
@@ -592,8 +642,11 @@ def eps(data, v1, v2):
     plt.ylim(-1, 1)
     plt.show()
 
+    if compareToTargetVerbose > 0:
+        print(maxSim)
 
-def metric(data, v1, v2):
+
+def metric(data, v1, v2, compareToTargetVerbose=0, targetData=None, similarityThreshold=0):
     METRICS = ['euclidean', 'cityblock', 'chebyshev', 'cosine', 'jaccard']
     distances = []
     for m in METRICS:
@@ -613,6 +666,7 @@ def metric(data, v1, v2):
     rows, cols = ds.choose_grid(len(METRICS))
     _, axs = plt.subplots(rows, cols, figsize=(cols * 5, rows * 5), squeeze=False)
     i, j = 0, 0
+    maxSim = {"max": -np.inf, "cluster": -1, "k": -1, "eps": -1, "metric": None}
     for n in range(len(METRICS)):
         estimator = DBSCAN(eps=distances[n], min_samples=2, metric=METRICS[n])
         estimator.fit(data)
@@ -624,6 +678,21 @@ def metric(data, v1, v2):
             sc.append(silhouette_score(data, labels))
             ds.plot_clusters(data, v2, v1, labels.astype(float), estimator.components_, k,
                              f'DBSCAN metric={METRICS[n]} eps={distances[n]:.2f} k={k}', ax=axs[i, j])
+
+            if compareToTargetVerbose > 0:
+                if compareToTargetVerbose > 1:
+                    print(k, "clusters:")
+                for cluster in range(k):
+                    score = adjusted_rand_score(targetData, np.array(estimator.labels_) == cluster)
+                    if compareToTargetVerbose > 1 and score > similarityThreshold:
+                        print("Cluster", cluster, "->", score)
+                    if maxSim["max"] < score:
+                        maxSim["max"] = score
+                        maxSim["cluster"] = i
+                        maxSim["k"] = k
+                        maxSim["eps"] = distances[n]
+                        maxSim["metric"] = METRICS[n]
+
         else:
             mse.append(0)
             sc.append(0)
@@ -636,13 +705,17 @@ def metric(data, v1, v2):
     plt.ylim(-1, 1)
     plt.show()
 
+    if compareToTargetVerbose > 0:
+        print(maxSim)
 
-def hierarchical(data, v1, v2, N_CLUSTERS):
+
+def hierarchical(data, v1, v2, N_CLUSTERS, compareToTargetVerbose=0, targetData=None, similarityThreshold=0):
     mse: list = []
     sc: list = []
     rows, cols = ds.choose_grid(len(N_CLUSTERS))
     _, axs = plt.subplots(rows, cols, figsize=(cols * 5, rows * 5), squeeze=False)
     i, j = 0, 0
+    maxSim = {"max": -np.inf, "cluster": -1, "k": -1}
     for n in range(len(N_CLUSTERS)):
         k = N_CLUSTERS[n]
         estimator = AgglomerativeClustering(n_clusters=k)
@@ -654,6 +727,19 @@ def hierarchical(data, v1, v2, N_CLUSTERS):
         ds.plot_clusters(data, v2, v1, labels, centers, k,
                          f'Hierarchical k={k}', ax=axs[i, j])
         i, j = (i + 1, 0) if (n + 1) % cols == 0 else (i, j + 1)
+
+        if compareToTargetVerbose > 0:
+            if compareToTargetVerbose > 1:
+                print(k, "clusters:")
+            for cluster in range(k):
+                score = adjusted_rand_score(targetData, np.array(estimator.labels_) == cluster)
+                if compareToTargetVerbose > 1 and score > similarityThreshold:
+                    print("Cluster", cluster, "->", score)
+                if maxSim["max"] < score:
+                    maxSim["max"] = score
+                    maxSim["cluster"] = i
+                    maxSim["k"] = k
+
     plt.show()
 
     fig, ax = plt.subplots(1, 2, figsize=(6, 3), squeeze=False)
@@ -662,16 +748,20 @@ def hierarchical(data, v1, v2, N_CLUSTERS):
     plt.ylim(-1, 1)
     plt.show()
 
+    if compareToTargetVerbose > 0:
+        print(maxSim)
 
-def hierarchicalMetrics(data, v1, v2):
+
+def hierarchicalMetrics(data, v1, v2, compareToTargetVerbose=0, targetData=None, similarityThreshold=0):
     METRICS = ['euclidean', 'cityblock', 'chebyshev', 'cosine', 'jaccard']
     LINKS = ['complete', 'average']
-    k = 3
+    k = 13
     values_mse = {}
     values_sc = {}
     rows = len(METRICS)
     cols = len(LINKS)
     _, axs = plt.subplots(rows, cols, figsize=(cols * 5, rows * 5), squeeze=False)
+    maxSim = {"max": -np.inf, "cluster": -1, "k": -1, "linkage": None, "metric": None}
     for i in range(len(METRICS)):
         mse: list = []
         sc: list = []
@@ -686,6 +776,21 @@ def hierarchicalMetrics(data, v1, v2):
             sc.append(silhouette_score(data, labels))
             ds.plot_clusters(data, v2, v1, labels, centers, k,
                              f'Hierarchical k={k} metric={m} link={link}', ax=axs[i, j])
+
+            if compareToTargetVerbose > 0:
+                if compareToTargetVerbose > 1:
+                    print(k, "clusters:")
+                for cluster in range(k):
+                    score = adjusted_rand_score(targetData, np.array(estimator.labels_) == cluster)
+                    if compareToTargetVerbose > 1 and score > similarityThreshold:
+                        print("Cluster", cluster, "->", score)
+                    if maxSim["max"] < score:
+                        maxSim["max"] = score
+                        maxSim["cluster"] = i
+                        maxSim["k"] = k
+                        maxSim["linkage"] = link
+                        maxSim["metric"] = m
+
         values_mse[m] = mse
         values_sc[m] = sc
     plt.show()
@@ -697,18 +802,30 @@ def hierarchicalMetrics(data, v1, v2):
     plt.ylim(-1, 1)
     plt.show()
 
+    if compareToTargetVerbose > 0:
+        print(maxSim)
+
+
+def purity_score(y_true, y_pred):
+    # compute contingency matrix (also called confusion matrix)
+    contingency_matrix = metrics.cluster.contingency_matrix(y_true, y_pred)
+    # return purity
+    return np.sum(np.amax(contingency_matrix, axis=0)) / np.sum(contingency_matrix)
+
 
 def fullClustering(data, target, v1=0, v2=1, N_CLUSTERS=(2, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29),
-                             withFeatureExtraction=False, variance=0.85, plotTarget=True):
+                   withFeatureExtraction=False, variance=0.85, plotTarget=True, compareToTargetVerbose=0,
+                   similarityThreshold=0):
 
     if withFeatureExtraction:
         transf = featureExtraction(data, target, variance, minimum2=True)
-        data = transf[[transf.columns[v1], transf.columns[v2]]]
+        # data = transf[[transf.columns[v1], transf.columns[v2]]]
+        data = transf
         v1 = 1
         v2 = 0
-        targetData = transf.pop(target)
-    else:
-        targetData = data.pop(target)
+    #     targetData = data.pop(target)
+    # else:
+    targetData = data.pop(target)
 
     if plotTarget:
         plt.title("var%s x var%s" % (v1, v2))
@@ -716,11 +833,23 @@ def fullClustering(data, target, v1=0, v2=1, N_CLUSTERS=(2, 3, 5, 7, 9, 11, 13, 
         plt.ylabel("var%s" % v2)
         points = plt.scatter(data.iloc[:, v2], data.iloc[:, v1], c=targetData, cmap=plt.cm.RdYlGn)
         plt.legend(*points.legend_elements(), title=target)
+        plt.show()
 
     rows, cols = ds.choose_grid(len(N_CLUSTERS))
-    kmeans(data, v1, v2, N_CLUSTERS, rows, cols)
-    em(data, v1, v2, N_CLUSTERS, rows, cols)
-    eps(data, v1, v2)
-    metric(data, v1, v2)
-    hierarchical(data, v1, v2, N_CLUSTERS)
-    hierarchicalMetrics(data, v1, v2)
+    print("knn")
+    kmeans(data, v1, v2, N_CLUSTERS, rows, cols, compareToTargetVerbose, targetData, similarityThreshold)
+
+    print("em")
+    em(data, v1, v2, N_CLUSTERS, rows, cols, compareToTargetVerbose, targetData, similarityThreshold)
+
+    print("eps")
+    eps(data, v1, v2, compareToTargetVerbose, targetData, similarityThreshold)
+
+    print("metric")
+    metric(data, v1, v2, compareToTargetVerbose, targetData, similarityThreshold)
+
+    print("hierarchical")
+    hierarchical(data, v1, v2, N_CLUSTERS, compareToTargetVerbose, targetData, similarityThreshold)
+
+    print("hierarchicalMetrics")
+    hierarchicalMetrics(data, v1, v2, compareToTargetVerbose, targetData, similarityThreshold)
